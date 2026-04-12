@@ -1,0 +1,480 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Platform root — no tenantId (defines isolation scope for other rows)
+model Tenant {
+  id             String   @id @default(uuid()) @db.Uuid
+  ownerUserId    String   @map("owner_user_id") @db.Uuid
+  clinicName     String   @map("clinic_name")
+  slug           String   @unique
+  subdomain      String?  @unique
+  customDomain   String?  @unique @map("custom_domain")
+  primaryColor   String   @default("#0F6E56") @map("primary_color")
+  secondaryColor String   @default("#E1F5EE") @map("secondary_color")
+  logoUrl        String?  @map("logo_url")
+  address        String?
+  phone          String?
+  timezone       String   @default("UTC")
+  specialty      String?
+  bio            String?
+  isActive       Boolean  @default(true) @map("is_active")
+  isPublished    Boolean  @default(false) @map("is_published")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  owner            User              @relation("TenantOwner", fields: [ownerUserId], references: [id])
+  users            User[]            @relation("UserPrimaryTenant")
+  clinicDoctors    ClinicDoctor[]
+  patients         Patient[]
+  workHours        WorkHour[]
+  blockedSlots     BlockedSlot[]
+  appointments     Appointment[]
+  payments         Payment[]
+  externalIncomes  ExternalIncome[]
+  expenseCategories ExpenseCategory[]
+  expenseSubcategories ExpenseSubcategory[]
+  expenses         Expense[]
+  monthlyStatements MonthlyStatement[]
+  statementSnapshots StatementSnapshot[]
+  statementExpenseBreakdowns StatementExpenseBreakdown[]
+  notifications    Notification[]
+  clinicDoctorPermissionRows ClinicDoctorPermissionRow[]
+
+  @@index([ownerUserId])
+  @@index([slug])
+  @@map("tenants")
+}
+
+enum UserRole {
+  admin
+  doctor
+  patient
+}
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  fullName      String    @map("full_name")
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  phone         String?
+  role          UserRole
+  tenantId      String?   @map("tenant_id") @db.Uuid
+  isActive      Boolean   @default(true) @map("is_active")
+  emailVerified Boolean   @default(false) @map("email_verified")
+  tokenVersion  Int       @default(0) @map("token_version")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  primaryTenant Tenant?  @relation("UserPrimaryTenant", fields: [tenantId], references: [id])
+  ownedTenants  Tenant[] @relation("TenantOwner")
+  clinicDoctors ClinicDoctor[]
+  patients      Patient[]
+  refreshTokens RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  expensesCreated Expense[] @relation("ExpenseCreatedBy")
+
+  @@index([tenantId])
+  @@index([email])
+  @@map("users")
+}
+
+enum ClinicDoctorPermission {
+  view_appointments
+  manage_appointments
+  view_patients
+  manage_patients
+  view_statements
+  manage_statements
+  manage_staff
+  manage_work_hours
+}
+
+model ClinicDoctor {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  specialty          String?
+  photoUrl           String?  @map("photo_url")
+  sessionDurationMin Int      @default(30) @map("session_duration_min")
+  feePerSession      Decimal  @default(0) @map("fee_per_session") @db.Decimal(10, 2)
+  isActive           Boolean  @default(true) @map("is_active")
+  isOwner            Boolean  @default(false) @map("is_owner")
+  joinedAt           DateTime @default(now()) @map("joined_at") @db.Timestamptz(6)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant       Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user         User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissions  ClinicDoctorPermissionRow[]
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("clinic_doctors")
+}
+
+model ClinicDoctorPermissionRow {
+  id             String                 @id @default(uuid()) @db.Uuid
+  tenantId       String                 @map("tenant_id") @db.Uuid
+  clinicDoctorId String                 @map("clinic_doctor_id") @db.Uuid
+  permission     ClinicDoctorPermission
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clinicDoctor ClinicDoctor @relation(fields: [clinicDoctorId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicDoctorId, permission])
+  @@index([tenantId])
+  @@map("clinic_doctor_permissions")
+}
+
+model Patient {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  userId      String?   @map("user_id") @db.Uuid
+  fullName    String    @map("full_name")
+  phone       String?
+  email       String?
+  dateOfBirth DateTime? @map("date_of_birth") @db.Date
+  gender      String?   // male | female | other
+  notes       String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User?         @relation(fields: [userId], references: [id])
+  appointments  Appointment[]
+
+  @@index([tenantId])
+  @@index([userId, tenantId])
+  @@map("patients")
+}
+
+model WorkHour {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  doctorId   String   @map("doctor_id") @db.Uuid
+  dayOfWeek  String   @map("day_of_week") // mon..sun
+  startTime  DateTime @map("start_time") @db.Time(6)
+  endTime    DateTime @map("end_time") @db.Time(6)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, doctorId])
+  @@map("work_hours")
+}
+
+model BlockedSlot {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  doctorId    String    @map("doctor_id") @db.Uuid
+  blockedDate DateTime  @map("blocked_date") @db.Date
+  startTime   DateTime? @map("start_time") @db.Time(6)
+  endTime     DateTime? @map("end_time") @db.Time(6)
+  reason      String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, doctorId, blockedDate])
+  @@map("blocked_slots")
+}
+
+enum AppointmentStatus {
+  pending
+  confirmed
+  in_progress
+  done
+  cancelled
+  no_show
+}
+
+enum AppointmentSource {
+  online
+  walk_in
+  phone
+}
+
+model Appointment {
+  id              String              @id @default(uuid()) @db.Uuid
+  tenantId        String              @map("tenant_id") @db.Uuid
+  doctorId        String              @map("doctor_id") @db.Uuid
+  patientId       String              @map("patient_id") @db.Uuid
+  appointmentDate DateTime            @map("appointment_date") @db.Date
+  startTime       DateTime            @map("start_time") @db.Time(6)
+  endTime         DateTime            @map("end_time") @db.Time(6)
+  status          AppointmentStatus   @default(pending)
+  source          AppointmentSource   @default(online)
+  feeCharged      Decimal             @default(0) @map("fee_charged") @db.Decimal(10, 2)
+  notes           String?
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient  Patient   @relation(fields: [patientId], references: [id])
+  payments Payment[]
+
+  @@unique([tenantId, doctorId, appointmentDate, startTime])
+  @@index([tenantId, doctorId, appointmentDate])
+  @@index([tenantId, patientId])
+  @@index([tenantId, status, appointmentDate])
+  @@map("appointments")
+}
+
+enum PaymentMethod {
+  cash
+  card
+  online
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  refunded
+}
+
+model Payment {
+  id             String        @id @default(uuid()) @db.Uuid
+  tenantId       String        @map("tenant_id") @db.Uuid
+  appointmentId  String        @map("appointment_id") @db.Uuid
+  amount         Decimal       @db.Decimal(10, 2)
+  method         PaymentMethod
+  status         PaymentStatus @default(pending)
+  transactionRef String?       @map("transaction_ref")
+  paidAt         DateTime?     @map("paid_at") @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, appointmentId])
+  @@map("payments")
+}
+
+model ExternalIncome {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  sourceName  String   @map("source_name")
+  description String?
+  amount      Decimal  @db.Decimal(10, 2)
+  incomeDate  DateTime @map("income_date") @db.Date
+  receiptUrl  String?  @map("receipt_url")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, incomeDate])
+  @@map("external_income")
+}
+
+model ExpenseCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subcategories ExpenseSubcategory[]
+  expenses      Expense[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("expense_categories")
+}
+
+model ExpenseSubcategory {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  categoryId String   @map("category_id") @db.Uuid
+  name       String
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@unique([categoryId, name])
+  @@index([tenantId, categoryId])
+  @@map("expense_subcategories")
+}
+
+model Expense {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  categoryId     String   @map("category_id") @db.Uuid
+  subcategoryId  String   @map("subcategory_id") @db.Uuid
+  description    String
+  amount         Decimal  @db.Decimal(10, 2)
+  expenseDate    DateTime @map("expense_date") @db.Date
+  notes          String?
+  receiptUrl     String?  @map("receipt_url")
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category    ExpenseCategory    @relation(fields: [categoryId], references: [id])
+  subcategory ExpenseSubcategory @relation(fields: [subcategoryId], references: [id])
+  creator     User               @relation("ExpenseCreatedBy", fields: [createdBy], references: [id])
+
+  @@index([tenantId, categoryId])
+  @@index([tenantId, subcategoryId])
+  @@index([tenantId, expenseDate(sort: Desc)])
+  @@map("expenses")
+}
+
+enum StatementStatus {
+  draft
+  finalized
+}
+
+model MonthlyStatement {
+  id                  String          @id @default(uuid()) @db.Uuid
+  tenantId            String          @map("tenant_id") @db.Uuid
+  year                Int
+  month               Int
+  totalClinicIncome   Decimal         @default(0) @map("total_clinic_income") @db.Decimal(10, 2)
+  totalExternalIncome Decimal         @default(0) @map("total_external_income") @db.Decimal(10, 2)
+  totalExpenses       Decimal         @default(0) @map("total_expenses") @db.Decimal(10, 2)
+  netProfit           Decimal         @default(0) @map("net_profit") @db.Decimal(10, 2)
+  status              StatementStatus @default(draft)
+  generatedAt         DateTime        @default(now()) @map("generated_at") @db.Timestamptz(6)
+  finalizedAt         DateTime?       @map("finalized_at") @db.Timestamptz(6)
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant            Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  snapshots         StatementSnapshot[]
+  expenseBreakdowns StatementExpenseBreakdown[]
+
+  @@unique([tenantId, year, month])
+  @@index([tenantId])
+  @@map("monthly_statements")
+}
+
+model StatementSnapshot {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  statementId  String   @map("statement_id") @db.Uuid
+  doctorId       String   @map("doctor_id") @db.Uuid
+  sessionsCount  Int      @default(0) @map("sessions_count")
+  grossIncome    Decimal  @default(0) @map("gross_income") @db.Decimal(10, 2)
+  doctorFeeTotal Decimal  @default(0) @map("doctor_fee_total") @db.Decimal(10, 2)
+  clinicShare    Decimal  @default(0) @map("clinic_share") @db.Decimal(10, 2)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  statement MonthlyStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, statementId])
+  @@map("statement_snapshots")
+}
+
+model StatementExpenseBreakdown {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  statementId   String   @map("statement_id") @db.Uuid
+  categoryId    String   @map("category_id") @db.Uuid
+  categoryName  String   @map("category_name")
+  totalAmount   Decimal  @default(0) @map("total_amount") @db.Decimal(10, 2)
+  expenseCount  Int      @default(0) @map("expense_count")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  statement MonthlyStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, statementId])
+  @@map("statement_expense_breakdown")
+}
+
+enum NotificationType {
+  new_booking
+  cancellation
+  payment
+  reminder
+  system
+  new_doctor_added
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  tenantId  String           @map("tenant_id") @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  type      NotificationType
+  title     String
+  message   String?
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, isRead, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model LoginAttempt {
+  id          String    @id @default(uuid()) @db.Uuid
+  identifier  String    @unique
+  failedCount Int       @default(0) @map("failed_count")
+  lockedUntil DateTime? @map("locked_until") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("login_attempts")
+}
+
+model PlatformLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  adminId   String   @map("admin_id") @db.Uuid
+  tenantId  String?  @map("tenant_id") @db.Uuid
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([adminId])
+  @@index([tenantId])
+  @@map("platform_logs")
+}
