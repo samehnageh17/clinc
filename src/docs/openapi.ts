@@ -6,7 +6,7 @@ export const openApiDocument = {
   info: {
     title: "Clinic SaaS API",
     description:
-      "Multi-tenant clinic platform REST API. Authentication uses HTTP-only cookies (`access_token`, `refresh_token`) and/or `Authorization: Bearer <jwt>`. Tenant scope for clinic routes: JWT `tenantId` and/or `X-Tenant-Id` header.",
+      "Multi-tenant clinic platform REST API. Authentication uses HTTP-only cookies (`access_token`, `refresh_token`) and/or `Authorization: Bearer <jwt>`. Tenant scope for clinic routes: JWT `tenantId` and/or `X-Tenant-Id` header. Dashboard areas map to: `/api/v1/appointments`, `/work-hours`, `/blocked-slots`, `/api/v1/public/clinics/:slug/*` (online booking), `/api/v1/*` finance, `/api/v1/staff`, `/api/v1/patients`, `/api/v1/notifications`.",
     version: "1.0.0",
   },
   servers: [{ url: "/", description: "Current server" }],
@@ -14,6 +14,11 @@ export const openApiDocument = {
     { name: "Health", description: "Liveness" },
     { name: "Auth", description: "Registration, login, tokens, password" },
     { name: "Finance", description: "Expenses, statements, external income (tenant-scoped)" },
+    { name: "Schedule", description: "Appointments, work hours, blocked slots (tenant staff)" },
+    { name: "Notifications", description: "Per-user in-app notifications" },
+    { name: "Staff", description: "Clinic doctors and permissions" },
+    { name: "Patients", description: "Patient directory (staff)" },
+    { name: "Public", description: "Unauthenticated clinic pages and online booking by slug" },
     { name: "Admin", description: "Platform admin (role: admin)" },
   ],
   components: {

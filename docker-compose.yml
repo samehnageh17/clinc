@@ -7,7 +7,8 @@ services:
       POSTGRES_PASSWORD: clinic_secret
       POSTGRES_DB: clinic_saas
     ports:
-      - "5432:5432"
+      # Use 5433 on host if another Postgres already uses 5432 (common on dev machines).
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

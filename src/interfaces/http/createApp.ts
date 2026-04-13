@@ -9,6 +9,11 @@ import { errorHandler } from "../../middleware/error.middleware.js";
 import { adminRoutes } from "./routes/admin.routes.js";
 import { authRoutes } from "./routes/auth.routes.js";
 import { financeRoutes } from "./routes/finance.routes.js";
+import { notificationsRoutes } from "./routes/notifications.routes.js";
+import { patientsRoutes } from "./routes/patients.routes.js";
+import { publicRoutes } from "./routes/public.routes.js";
+import { scheduleRoutes } from "./routes/schedule.routes.js";
+import { staffRoutes } from "./routes/staff.routes.js";
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -21,6 +26,13 @@ const globalLimiter = rateLimit({
 const authLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const publicLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 40,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -47,8 +59,13 @@ export function createApp() {
 
   setupSwagger(app);
 
+  app.use("/api/v1/public", publicLimiter, publicRoutes());
   app.use("/api/v1/auth", authLimiter, authRoutes());
   app.use("/api/v1", financeRoutes());
+  app.use("/api/v1", scheduleRoutes());
+  app.use("/api/v1", notificationsRoutes());
+  app.use("/api/v1", staffRoutes());
+  app.use("/api/v1", patientsRoutes());
   app.use("/api/v1/admin", adminRoutes());
 
   app.use(errorHandler);

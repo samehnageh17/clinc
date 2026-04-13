@@ -1,5 +1,9 @@
 import { ClinicDoctorPermission as PrismaPerm } from "@prisma/client";
-import type { IClinicDoctorRepository, ClinicDoctorPermission } from "../../domain/repositories/IClinicDoctorRepository.js";
+import type {
+  IClinicDoctorRepository,
+  ClinicDoctorPermission,
+  ClinicDoctorStaffView,
+} from "../../domain/repositories/IClinicDoctorRepository.js";
 import { prisma } from "../database/prisma.js";
 import { toClinicDoctorEntity } from "../mappers/entityMappers.js";
 
@@ -109,8 +113,33 @@ export class ClinicDoctorRepository implements IClinicDoctorRepository {
     });
   }
 
+  async reactivate(tenantId: string, clinicDoctorId: string): Promise<void> {
+    await prisma.clinicDoctor.updateMany({
+      where: { tenantId, id: clinicDoctorId },
+      data: { isActive: true },
+    });
+  }
+
   async listByTenant(tenantId: string) {
     const rows = await prisma.clinicDoctor.findMany({ where: { tenantId } });
     return rows.map(toClinicDoctorEntity);
+  }
+
+  async listStaffView(tenantId: string): Promise<ClinicDoctorStaffView[]> {
+    const rows = await prisma.clinicDoctor.findMany({
+      where: { tenantId },
+      include: {
+        user: { select: { fullName: true, email: true, phone: true } },
+        permissions: true,
+      },
+      orderBy: { joinedAt: "asc" },
+    });
+    return rows.map((r) => ({
+      doctor: toClinicDoctorEntity(r),
+      fullName: r.user.fullName,
+      email: r.user.email,
+      phone: r.user.phone,
+      permissions: r.permissions.map((p) => p.permission as ClinicDoctorPermission),
+    }));
   }
 }

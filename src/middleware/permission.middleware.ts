@@ -2,9 +2,9 @@ import type { NextFunction, Request, Response } from "express";
 import { ClinicDoctorPermission } from "@prisma/client";
 import { ForbiddenError } from "../domain/errors/AppError.js";
 import { prisma } from "../infrastructure/database/prisma.js";
+import { asyncHandler } from "./asyncHandler.js";
 
-export async function loadClinicPermissions(req: Request, _res: Response, next: NextFunction) {
-  try {
+export const loadClinicPermissions = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user || req.tenantId == null || req.tenantId === "") {
       req.permissionSet = undefined;
       return next();
@@ -22,17 +22,14 @@ export async function loadClinicPermissions(req: Request, _res: Response, next: 
       where: { tenantId, userId: req.user.id, isActive: true },
       include: { permissions: true },
     });
-    if (!cd) return next(new ForbiddenError("No access to this clinic"));
+    if (!cd) throw new ForbiddenError("No access to this clinic");
     if (cd.isOwner) {
       req.permissionSet = "*";
       return next();
     }
     req.permissionSet = new Set(cd.permissions.map((p) => p.permission));
     next();
-  } catch (e) {
-    next(e);
-  }
-}
+});
 
 export function requirePermission(permission: ClinicDoctorPermission) {
   return (req: Request, _res: Response, next: NextFunction) => {

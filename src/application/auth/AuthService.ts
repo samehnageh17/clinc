@@ -19,6 +19,7 @@ import { LoginAttemptRepository } from "../../infrastructure/repositories/LoginA
 import { PasswordResetRepository } from "../../infrastructure/repositories/PasswordResetRepository.js";
 import { RefreshTokenRepository } from "../../infrastructure/repositories/RefreshTokenRepository.js";
 import { seedDefaultExpenseCategories } from "../../infrastructure/tenant/seedDefaultExpenseCategories.js";
+import { seedDefaultWorkHours } from "../../infrastructure/tenant/seedDefaultWorkHours.js";
 
 const ALL_PERMS: ClinicDoctorPermission[] = [
   ClinicDoctorPermission.view_appointments,
@@ -127,6 +128,7 @@ export class AuthService {
           address: input.address ?? null,
           timezone: input.timezone ?? "UTC",
           bio: input.bio ?? null,
+          isPublished: true,
         },
       });
       await tx.user.update({
@@ -149,11 +151,12 @@ export class AuthService {
           permission,
         })),
       });
-      return { userId: user.id, tenantId: tenant.id };
+      return { userId: user.id, tenantId: tenant.id, clinicDoctorId: doc.id };
     });
 
     await seedDefaultExpenseCategories(result.tenantId);
-    return result;
+    await seedDefaultWorkHours(result.tenantId, result.clinicDoctorId);
+    return { userId: result.userId, tenantId: result.tenantId, clinicDoctorId: result.clinicDoctorId };
   }
 
   async registerPatient(input: RegisterPatientInput) {
