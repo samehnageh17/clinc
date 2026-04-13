@@ -49,9 +49,8 @@ export const openApiDocument = {
       },
       RegisterAdmin: {
         type: "object",
-        required: ["role", "fullName", "email", "password", "adminSecretKey"],
+        required: ["fullName", "email", "password", "adminSecretKey"],
         properties: {
-          role: { type: "string", enum: ["admin"] },
           fullName: { type: "string" },
           email: { type: "string", format: "email" },
           password: { type: "string", minLength: 8 },
@@ -60,9 +59,8 @@ export const openApiDocument = {
       },
       RegisterDoctor: {
         type: "object",
-        required: ["role", "fullName", "email", "password", "clinicName", "slug"],
+        required: ["fullName", "email", "password", "clinicName", "slug"],
         properties: {
-          role: { type: "string", enum: ["doctor"] },
           fullName: { type: "string" },
           email: { type: "string", format: "email" },
           password: { type: "string", minLength: 8 },
@@ -80,9 +78,8 @@ export const openApiDocument = {
       },
       RegisterPatient: {
         type: "object",
-        required: ["role", "fullName", "email", "password", "tenantId"],
+        required: ["fullName", "email", "password", "tenantId"],
         properties: {
-          role: { type: "string", enum: ["patient"] },
           fullName: { type: "string" },
           email: { type: "string", format: "email" },
           password: { type: "string", minLength: 8 },
@@ -199,22 +196,46 @@ export const openApiDocument = {
         },
       },
     },
-    "/api/v1/auth/register": {
+    "/api/v1/auth/register/admin": {
       post: {
         tags: ["Auth"],
-        summary: "Register (admin, doctor, or patient)",
+        summary: "Register platform admin",
         requestBody: {
           required: true,
           content: {
-            "application/json": {
-              schema: {
-                oneOf: [
-                  { $ref: "#/components/schemas/RegisterAdmin" },
-                  { $ref: "#/components/schemas/RegisterDoctor" },
-                  { $ref: "#/components/schemas/RegisterPatient" },
-                ],
-              },
-            },
+            "application/json": { schema: { $ref: "#/components/schemas/RegisterAdmin" } },
+          },
+        },
+        responses: {
+          "201": { description: "Created" },
+          "409": { description: "Conflict", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+        },
+      },
+    },
+    "/api/v1/auth/register/doctor": {
+      post: {
+        tags: ["Auth"],
+        summary: "Register doctor (creates clinic tenant)",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/RegisterDoctor" } },
+          },
+        },
+        responses: {
+          "201": { description: "Created" },
+          "409": { description: "Conflict", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+        },
+      },
+    },
+    "/api/v1/auth/register/patient": {
+      post: {
+        tags: ["Auth"],
+        summary: "Register patient under a clinic tenant",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/RegisterPatient" } },
           },
         },
         responses: {

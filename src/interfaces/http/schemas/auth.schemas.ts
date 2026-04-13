@@ -2,16 +2,14 @@ import { z } from "zod";
 
 const password = z.string().min(8).max(128);
 
-const registerAdmin = z.object({
-  role: z.literal("admin"),
+export const registerAdminSchema = z.object({
   fullName: z.string().min(1).max(200),
   email: z.string().email(),
   password,
   adminSecretKey: z.string().min(1),
 });
 
-const registerDoctor = z.object({
-  role: z.literal("doctor"),
+export const registerDoctorSchema = z.object({
   fullName: z.string().min(1).max(200),
   email: z.string().email(),
   password,
@@ -31,8 +29,7 @@ const registerDoctor = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
 });
 
-const registerPatient = z.object({
-  role: z.literal("patient"),
+export const registerPatientSchema = z.object({
   fullName: z.string().min(1).max(200),
   email: z.string().email(),
   password,
@@ -41,8 +38,6 @@ const registerPatient = z.object({
   gender: z.enum(["male", "female", "other"]).optional(),
   tenantId: z.string().uuid(),
 });
-
-export const registerSchema = z.discriminatedUnion("role", [registerAdmin, registerDoctor, registerPatient]);
 
 export const loginSchema = z.object({
   email: z.string().email(),

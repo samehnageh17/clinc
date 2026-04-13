@@ -3,12 +3,15 @@ import type { z } from "zod";
 import { env } from "../../../config/env.js";
 import { authService } from "../../../container.js";
 import { authRequired } from "../../../middleware/auth.middleware.js";
+import { asyncHandler } from "../../../middleware/asyncHandler.js";
 import { validateBody } from "../../../middleware/validate.middleware.js";
 import {
   changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
-  registerSchema,
+  registerAdminSchema,
+  registerDoctorSchema,
+  registerPatientSchema,
   resetPasswordSchema,
 } from "../schemas/auth.schemas.js";
 
@@ -19,7 +22,7 @@ function accessCookieOpts() {
   return {
     httpOnly: true,
     secure: env.COOKIE_SECURE,
-    sameSite: "strict" as const,
+    sameSite: "lax" as const,
     maxAge: ACCESS_MS,
     path: "/",
   };
@@ -29,7 +32,7 @@ function refreshCookieOpts() {
   return {
     httpOnly: true,
     secure: env.COOKIE_SECURE,
-    sameSite: "strict" as const,
+    sameSite: "lax" as const,
     maxAge: REFRESH_MS,
     path: "/",
   };
@@ -38,36 +41,50 @@ function refreshCookieOpts() {
 export function authRoutes(): Router {
   const r = Router();
 
-  r.post("/register", validateBody(registerSchema), async (req, res, next) => {
-    try {
-      const body = req.body as z.infer<typeof registerSchema>;
-      if (body.role === "admin") {
-        const out = await authService.registerAdmin({
-          fullName: body.fullName,
-          email: body.email,
-          password: body.password,
-          adminSecretKey: body.adminSecretKey,
-        });
-        return res.status(201).json(out);
-      }
-      if (body.role === "doctor") {
-        const out = await authService.registerDoctor({
-          fullName: body.fullName,
-          email: body.email,
-          password: body.password,
-          phone: body.phone,
-          clinicName: body.clinicName,
-          specialty: body.specialty,
-          primaryColor: body.primaryColor,
-          secondaryColor: body.secondaryColor,
-          logoUrl: body.logoUrl || undefined,
-          address: body.address,
-          timezone: body.timezone,
-          bio: body.bio,
-          slug: body.slug,
-        });
-        return res.status(201).json(out);
-      }
+  r.post(
+    "/register/admin",
+    validateBody(registerAdminSchema),
+    asyncHandler(async (req, res) => {
+      const body = req.body as z.infer<typeof registerAdminSchema>;
+      const out = await authService.registerAdmin({
+        fullName: body.fullName,
+        email: body.email,
+        password: body.password,
+        adminSecretKey: body.adminSecretKey,
+      });
+      res.status(201).json(out);
+    }),
+  );
+
+  r.post(
+    "/register/doctor",
+    validateBody(registerDoctorSchema),
+    asyncHandler(async (req, res) => {
+      const body = req.body as z.infer<typeof registerDoctorSchema>;
+      const out = await authService.registerDoctor({
+        fullName: body.fullName,
+        email: body.email,
+        password: body.password,
+        phone: body.phone,
+        clinicName: body.clinicName,
+        specialty: body.specialty,
+        primaryColor: body.primaryColor,
+        secondaryColor: body.secondaryColor,
+        logoUrl: body.logoUrl || undefined,
+        address: body.address,
+        timezone: body.timezone,
+        bio: body.bio,
+        slug: body.slug,
+      });
+      res.status(201).json(out);
+    }),
+  );
+
+  r.post(
+    "/register/patient",
+    validateBody(registerPatientSchema),
+    asyncHandler(async (req, res) => {
+      const body = req.body as z.infer<typeof registerPatientSchema>;
       const out = await authService.registerPatient({
         fullName: body.fullName,
         email: body.email,
@@ -77,14 +94,14 @@ export function authRoutes(): Router {
         gender: body.gender,
         tenantId: body.tenantId,
       });
-      return res.status(201).json(out);
-    } catch (e) {
-      return next(e);
-    }
-  });
+      res.status(201).json(out);
+    }),
+  );
 
-  r.post("/login", validateBody(loginSchema), async (req, res, next) => {
-    try {
+  r.post(
+    "/login",
+    validateBody(loginSchema),
+    asyncHandler(async (req, res) => {
       const body = req.body as z.infer<typeof loginSchema>;
       const out = await authService.login(body);
       res.cookie("access_token", out.accessToken, accessCookieOpts());
@@ -94,70 +111,74 @@ export function authRoutes(): Router {
         role: out.role,
         tenantId: out.tenantId,
       });
-    } catch (e) {
-      return next(e);
-    }
-  });
+    }),
+  );
 
-  r.post("/refresh", async (req, res, next) => {
-    try {
+  r.post(
+    "/refresh",
+    asyncHandler(async (req, res) => {
       const out = await authService.refresh(req.cookies?.refresh_token);
       res.cookie("access_token", out.accessToken, accessCookieOpts());
       res.cookie("refresh_token", out.refreshToken, refreshCookieOpts());
       res.json({ ok: true });
-    } catch (e) {
-      return next(e);
-    }
-  });
+    }),
+  );
 
-  r.post("/logout", async (req, res, next) => {
-    try {
+  r.post(
+    "/logout",
+    asyncHandler(async (req, res) => {
       await authService.logout(req.cookies?.refresh_token);
       res.clearCookie("access_token", { path: "/" });
       res.clearCookie("refresh_token", { path: "/" });
       res.status(204).end();
-    } catch (e) {
-      return next(e);
-    }
-  });
+    }),
+  );
 
-  r.post("/forgot-password", validateBody(forgotPasswordSchema), async (req, res, next) => {
-    try {
+  r.post(
+    "/forgot-password",
+    validateBody(forgotPasswordSchema),
+    asyncHandler(async (req, res) => {
       const body = req.body as z.infer<typeof forgotPasswordSchema>;
       const result = await authService.forgotPassword(body.email);
       if (env.NODE_ENV !== "production" && result?.resetToken) {
-        return res.json({
+        res.json({
           message: "If the email exists, reset instructions were sent.",
           resetToken: result.resetToken,
         });
+        return;
       }
-      res.json({ message: "If the email exists, reset instructions were sent." });
-    } catch (e) {
-      return next(e);
-    }
-  });
+      res.json({
+        message: "If the email exists, reset instructions were sent.",
+      });
+    }),
+  );
 
-  r.post("/reset-password", validateBody(resetPasswordSchema), async (req, res, next) => {
-    try {
+  r.post(
+    "/reset-password",
+    validateBody(resetPasswordSchema),
+    asyncHandler(async (req, res) => {
       const body = req.body as z.infer<typeof resetPasswordSchema>;
       await authService.resetPassword(body.token, body.password);
       res.json({ message: "Password updated" });
-    } catch (e) {
-      return next(e);
-    }
-  });
+    }),
+  );
 
-  r.patch("/password", authRequired, validateBody(changePasswordSchema), async (req, res, next) => {
-    try {
+  r.patch(
+    "/password",
+    authRequired,
+    validateBody(changePasswordSchema),
+    asyncHandler(async (req, res) => {
       const body = req.body as z.infer<typeof changePasswordSchema>;
-      await authService.changePassword(req.user!.id, body.currentPassword, body.newPassword);
+      await authService.changePassword(
+        req.user!.id,
+        body.currentPassword,
+        body.newPassword,
+      );
       res.clearCookie("access_token", { path: "/" });
       res.clearCookie("refresh_token", { path: "/" });
       res.json({ message: "Password changed; please sign in again." });
-    } catch (e) {
-      return next(e);
-    }
-  });
+    }),
+  );
 
   return r;
 }

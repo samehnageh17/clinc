@@ -87,11 +87,10 @@ Send requests with `credentials: 'include'` from browsers. For tools like curl, 
 ### Example: register doctor
 
 ```http
-POST /api/v1/auth/register
+POST /api/v1/auth/register/doctor
 Content-Type: application/json
 
 {
-  "role": "doctor",
   "fullName": "Dr. Example",
   "email": "doc@example.com",
   "password": "securepass123",
